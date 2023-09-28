@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -9,25 +10,50 @@ import (
 	"strings"
 )
 
-var inputFile string
+var (
+	inputFile              string
+	outputFile             string
+	printToStdout          bool
+	includeVulnerabilities bool
+)
+
+func printBanner() {
+	banner := `
+	________      __  __       ___            __ 
+	/ ___/ _ \____/ /_/ /  ____/ _ \__ _____ _/ / 
+	/ (_ / // /___/ __/ _ \/ __/ // / // / _ / _ \
+	\___/\___/    \__/_//_/_/  \___/\_,_/\_, /_//_/
+					    /___/ 
+		`
+	fmt.Println(banner)
+	h := []string{
+		"Options:",
+		"  -f  --input <filename>         Scan file",
+		"  -u, --url <domain name>        Provide domain name",
+		"  -r, --report                   to generate report.txt",
+
+		"\n",
+	}
+	fmt.Fprintf(os.Stderr, "%s", strings.Join(h, "\n"))
+}
+
+// Rest of your code...
 
 func main() {
-	// Parse the command-line flags
-	os.Args = os.Args[1:]
-	for _, arg := range os.Args {
-		if arg == "-i" {
-			inputFile = os.Args[1]
-			os.Args = os.Args[2:]
-			break
-		}
-		if arg == "--help" {
-			help()
-		}
-	}
+	printBanner()
+
+	// Parse command-line flags
+	flag.StringVar(&inputFile, "f", "", "Input file for checking vulnerabilities")
+	flag.StringVar(&outputFile, "output", "report.txt", "Output file for the vulnerability report")
+	flag.BoolVar(&printToStdout, "stdout", false, "Print report to stdout instead of writing to a file")
+	flag.BoolVar(&includeVulnerabilities, "vulnerability", true, "Include detected vulnerabilities in the report")
+	reportFlag := flag.Bool("r", false, "Generate a report")
+
+	flag.Parse()
 
 	// If the input file is not specified, print an error and exit
 	if inputFile == "" {
-		fmt.Println("Please specify an input file using the `--input` flag.")
+		fmt.Println("Please specify an input file using the `-f` flag.")
 		os.Exit(1)
 	}
 
@@ -38,13 +64,26 @@ func main() {
 		return
 	}
 
-	// Detect vulnerabilities and generate a report
+	// Detect vulnerabilities
 	vulnerabilities := detectVulnerabilities(code)
-	generateReport(vulnerabilities, "report.txt")
+
+	if len(vulnerabilities) == 0 {
+		fmt.Println("No vulnerabilities detected.....You are good to go")
+	} else {
+		// Display vulnerabilities
+		fmt.Println("Vulnerabilities Detected!!!!!")
+		// Display total count of vulnerabilities
+		fmt.Printf("Total vulnerabilities detected: %d\n", len(vulnerabilities))
+	}
+
+	// If the report flag is provided, save the report to a file
+	if *reportFlag {
+		saveReport(vulnerabilities, outputFile)
+	}
 }
-func help() {
-	fmt.Println("-i : input flag for passing files for checking vulnerabilities")
-}
+
+// Rest of your code...
+
 func readCodeFromFile(filename string) (string, error) {
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -52,6 +91,7 @@ func readCodeFromFile(filename string) (string, error) {
 	}
 	return string(content), nil
 }
+
 func detectVulnerabilities(code string) []string {
 	vulnerabilities := []string{}
 
@@ -97,7 +137,7 @@ func detectVulnerabilities(code string) []string {
 }
 
 func runGosec(code string) ([]byte, error) {
-	tmpFile, err := os.CreateTemp("", "gosec_input_*.go")
+	tmpFile, err := ioutil.TempFile("", "gosec_input_*.go")
 	if err != nil {
 		return nil, err
 	}
@@ -114,6 +154,8 @@ func runGosec(code string) ([]byte, error) {
 
 func parseGosecOutput(output []byte) []string {
 	var vulnerabilities []string
+
+	// Parse the Gosec output and extract vulnerabilities here if needed
 
 	return vulnerabilities
 }
@@ -141,7 +183,19 @@ func manualPenetrationTesting(code string) []string {
 	return vulnerabilities
 }
 
-func generateReport(vulnerabilities []string, reportFile string) {
+func displayReport(vulnerabilities []string) {
+	if len(vulnerabilities) == 0 {
+		fmt.Println("No vulnerabilities detected.")
+		return
+	}
+
+	fmt.Println("Detected vulnerabilities:")
+	for _, v := range vulnerabilities {
+		fmt.Println(v)
+	}
+}
+
+func saveReport(vulnerabilities []string, filename string) {
 	if len(vulnerabilities) == 0 {
 		fmt.Println("No vulnerabilities detected.")
 		return
@@ -149,12 +203,11 @@ func generateReport(vulnerabilities []string, reportFile string) {
 
 	reportText := "Detected vulnerabilities:\n"
 	for _, v := range vulnerabilities {
-
 		reportText += v + "\n\n"
 	}
 
 	// Write the report to a new text file
-	if err := ioutil.WriteFile(reportFile, []byte(reportText), 0644); err != nil {
+	if err := ioutil.WriteFile(filename, []byte(reportText), 0644); err != nil {
 		fmt.Println("Error writing report to file:", err)
 	}
 }
